@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(message = FALSE)
 knitr::opts_chunk$set(warning = FALSE)
 options(stringsAsFactors = F)
-setwd("C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project")
 
 #Loading in Libraries
 library(readxl)
@@ -23,7 +22,6 @@ library(factoextra)
 library(corrplot)
 library(lme4)
 library(GGally)
-
 ```
 
 ```{r cleandata}
@@ -45,7 +43,6 @@ new_data1 <- new_data %>% filter(Year=="2019") %>% select(-c(Flower, Establishme
 clean.data <- new_data1[complete.cases(new_data1[, 9:16]), ] %>% print()
 ```
 
-
 ```{r datapca}
 traits2 <- clean.data[, c(9:16)]
 std.traits2 <- scale(traits2, center = TRUE, scale = TRUE)
@@ -53,14 +50,12 @@ data.pca <- prcomp(clean.data[, c(9:16)]) %>% print()
 pca.summ <- summary(data.pca) %>% print()
 
 # Maybe use 5 Principal Components?
-str(clean.data)
 ```
 
 ```{r writetofile}
 write_csv(new_data, path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/newdata.csv")
 write_csv(new_data1,path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/Filtereddata.csv")
 ```
-
 
 ```{r diagrams}
 # Used to find the correlation in the traits. 
@@ -71,7 +66,39 @@ corr_traits
 ```{r modeling}
 clean.data$Rep <- as.factor(clean.data$Rep)
 
-mod.one <- glmer(as.factor(Entry) ~ Weight + TQ + Drought + (1 | Rep), family = binomial(lin = "logit"), data = clean.data)
+# Using the glmer function from the lme4 package. 
+# What are the random effects? For this one, I said it was the Replications, but this might be wrong. 
+# I've said that the Entries themselves were the categorical responses. 
+# glmer gives us a generalized linear model with link = logit. 
+# I'm wondering if TQ is "Turf Quality". Wondering if this could be our response?
+
+preds <- (clean.data[, c(9:16)]) %>% as.matrix()
+# Not sure if this is done correctly. 
+# mod.one <- lmer(preds ~ Entry + Female + Male + (1 | Rep),    
+#                  data = clean.data)
+
+aov.one <- summary(aov(lmer(preds ~ Entry, random = ~1 | Rep, data = clean.data)))
+help(gl)
 summary(mod.one)
+
+# Checking to see if data is overdispersed:
+overdisp_fun <- function(model) {
+    ## number of variance parameters in an n-by-n variance-covariance matrix
+    vpars <- function(m) {
+        nrow(m) * (nrow(m) + 1)/2
+    }
+    # The next two lines calculate the residual degrees of freedom
+    model.df <- sum(sapply(VarCorr(model), vpars)) + length(fixef(model))
+    rdf <- nrow(model.frame(model)) - model.df
+    # extracts the Pearson residuals
+    rp <- residuals(model, type = "pearson")
+    Pearson.chisq <- sum(rp^2)
+    prat <- Pearson.chisq/rdf
+    # Generates a p-value. If less than 0.05, the data are overdispersed.
+    pval <- pchisq(Pearson.chisq, df = rdf, lower.tail = FALSE)
+    c(chisq = Pearson.chisq, ratio = prat, rdf = rdf, p = pval)
+}
+
+overdisp_fun(mod.one) # Great news, data is not overdispersed!
 
 ```
