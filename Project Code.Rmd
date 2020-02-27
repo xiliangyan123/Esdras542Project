@@ -1,0 +1,77 @@
+---
+title: "ProjectCode"
+author: "Michael Yan"
+date: "2/26/2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+options(stringsAsFactors = F)
+setwd("C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project")
+
+#Loading in Libraries
+library(readxl)
+library(cluster)
+library(readr) 
+library(tidyverse)
+library(psych)
+library(gridExtra)
+library(factoextra)
+library(corrplot)
+library(lme4)
+library(GGally)
+
+```
+
+```{r cleandata}
+raw_data <- data.frame(read_excel("ZEsdras CAT for analysis.xlsx", sheet = "Data"))
+names(raw_data)[c(4,11)] <- c("Plot","Weight")
+
+# Converting all the traits to numeric quantities. 
+traits <- lapply(raw_data[,c(9:20)], as.numeric) %>% data.frame()
+mains <- raw_data[, -c(9:20)] %>% data.frame()
+full_data <- data.frame(mains, traits)
+
+#Bringing in Pedigree (Parental) Data
+ped <- read.csv("ped.csv")
+pedigree <- data.frame(ped[, c(1:3)])
+
+# Merging pedigree and full_data
+new_data <- inner_join(pedigree, full_data, by = "Entry")
+new_data1 <- new_data %>% filter(Year=="2019") %>% select(-c(Flower, Establishment, WK, Mother, male, FC))
+clean.data <- new_data1[complete.cases(new_data1[, 9:16]), ] %>% print()
+```
+
+
+```{r datapca}
+traits2 <- clean.data[, c(9:16)]
+std.traits2 <- scale(traits2, center = TRUE, scale = TRUE)
+data.pca <- prcomp(clean.data[, c(9:16)]) %>% print() 
+pca.summ <- summary(data.pca) %>% print()
+
+# Maybe use 5 Principal Components?
+str(clean.data)
+```
+
+```{r writetofile}
+write_csv(new_data, path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/newdata.csv")
+write_csv(new_data1,path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/Filtereddata.csv")
+```
+
+
+```{r diagrams}
+# Used to find the correlation in the traits. 
+corr_traits <- ggcorr(traits2, label = TRUE, label_size = 4, label_round = 2)
+corr_traits
+```
+
+```{r modeling}
+clean.data$Rep <- as.factor(clean.data$Rep)
+
+mod.one <- glmer(as.factor(Entry) ~ Weight + TQ + Drought + (1 | Rep), family = binomial(lin = "logit"), data = clean.data)
+summary(mod.one)
+
+```
