@@ -24,6 +24,14 @@ library(lme4)
 library(GGally)
 ```
 
+# Important hyperlinks!
+[Analysis of similarities](http://finzi.psych.upenn.edu/R/library/vegan/html/anosim.html)
+[Doing linear mixed effect models in R](https://www.rdocumentation.org/packages/lme4/versions/1.1-21/topics/lmer)
+[Different types of Mixed Effects](http://www.dwoll.de/rexrepos/posts/anovaMixed.html#using-lmer-from-package-lme4)
+[Categorical Response Variable](https://stats.stackexchange.com/questions/319427/mixed-model-with-categorical-response-variable)
+[More Mixed Effect Model Code](https://ase.tufts.edu/gsc/gradresources/guidetomixedmodelsinr/mixed%20model%20guide.html)
+
+
 ```{r cleandata}
 raw_data <- data.frame(read_excel("ZEsdras CAT for analysis.xlsx", sheet = "Data"))
 names(raw_data)[c(4,11)] <- c("Plot","Weight")
@@ -53,14 +61,16 @@ pca.summ <- summary(data.pca) %>% print()
 ```
 
 ```{r writetofile}
-write_csv(new_data, path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/newdata.csv")
-write_csv(new_data1,path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project/Filtereddata.csv")
+write_csv(new_data, path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project Stuff/Esdras542Project/uncleandata.csv")
+write_csv(clean.data,path = "C:/Users/xilia/OneDrive/Desktop/2020 - Spring/ST542/Project Stuff/Esdras542Project/cleandata.csv")
 ```
 
 ```{r diagrams}
 # Used to find the correlation in the traits. 
-corr_traits <- ggcorr(traits2, label = TRUE, label_size = 4, label_round = 2)
-corr_traits
+
+png("Correlationplot.png")
+ggcorr(traits2, label = TRUE, label_size = 4, label_round = 2)
+dev.off()
 ```
 
 ```{r modeling}
@@ -72,33 +82,79 @@ clean.data$Rep <- as.factor(clean.data$Rep)
 # glmer gives us a generalized linear model with link = logit. 
 # I'm wondering if TQ is "Turf Quality". Wondering if this could be our response?
 
-preds <- (clean.data[, c(9:16)]) %>% as.matrix()
-# Not sure if this is done correctly. 
-# mod.one <- lmer(preds ~ Entry + Female + Male + (1 | Rep),    
-#                  data = clean.data)
+# resps <- (clean.data[, c(9:16)]) %>% as.matrix()
+# 
+# # selection model for the response variables. 
+# mods <- lm(resps ~ Entry, data = clean.data)
+# b <- summary(mods)
 
-aov.one <- summary(aov(lmer(preds ~ Entry, random = ~1 | Rep, data = clean.data)))
-help(gl)
-summary(mod.one)
+# b$`Response Weight` # weight is likely not a good response variable to determine best parent
+# b$`Response TQ` # a significant term - pvalue is almost 0. 
+# b$`Response Density` # a significant term- pvalue is almost 0. 
+# b$`Response Color` # seems to be a significant term, but is is reliable? 
+# b$`Response Texture` # seems to be significant 
+# b$`Response Uniformity` # seems to be significant
+# b$`Response Drought` # seems significant
+# b$`Response Coverage` # seems significant
+
+# anova(mods)
+
+# mods <- summary(anova(lmer(resps[,1] ~ Entry + (1 | Rep), family = poisson(), data = clean.data)))
+# aov.one <- summary(aov(lmer(preds ~ Entry + (1 | Rep), data = clean.data)))
+# help(gl)
+# summary(mod.one)
 
 # Checking to see if data is overdispersed:
-overdisp_fun <- function(model) {
-    ## number of variance parameters in an n-by-n variance-covariance matrix
-    vpars <- function(m) {
-        nrow(m) * (nrow(m) + 1)/2
-    }
-    # The next two lines calculate the residual degrees of freedom
-    model.df <- sum(sapply(VarCorr(model), vpars)) + length(fixef(model))
-    rdf <- nrow(model.frame(model)) - model.df
-    # extracts the Pearson residuals
-    rp <- residuals(model, type = "pearson")
-    Pearson.chisq <- sum(rp^2)
-    prat <- Pearson.chisq/rdf
-    # Generates a p-value. If less than 0.05, the data are overdispersed.
-    pval <- pchisq(Pearson.chisq, df = rdf, lower.tail = FALSE)
-    c(chisq = Pearson.chisq, ratio = prat, rdf = rdf, p = pval)
-}
+# overdisp_fun <- function(model) {
+#     ## number of variance parameters in an n-by-n variance-covariance matrix
+#     vpars <- function(m) {
+#         nrow(m) * (nrow(m) + 1)/2
+#     }
+#     # The next two lines calculate the residual degrees of freedom
+#     model.df <- sum(sapply(VarCorr(model), vpars)) + length(fixef(model))
+#     rdf <- nrow(model.frame(model)) - model.df
+#     # extracts the Pearson residuals
+#     rp <- residuals(model, type = "pearson")
+#     Pearson.chisq <- sum(rp^2)
+#     prat <- Pearson.chisq/rdf
+#     # Generates a p-value. If less than 0.05, the data are overdispersed.
+#     pval <- pchisq(Pearson.chisq, df = rdf, lower.tail = FALSE)
+#     c(chisq = Pearson.chisq, ratio = prat, rdf = rdf, p = pval)
+# }
+# 
+# overdisp_fun(mod.one) # Great news, data is not overdispersed!
+```
 
-overdisp_fun(mod.one) # Great news, data is not overdispersed!
 
+```{r fdata}
+# Factor analysis approach: 
+invisible(clean.data)
+traits.dat <- clean.data[, c(9:16)] %>% as.matrix()
+scaled_dat <- scale(traits.dat, center = TRUE, scale = TRUE)
+# scaling the data vs not scaling the data might be different. Might be better to scale. 
+
+dat.pca1 <- prcomp(scaled_dat) %>% print()
+
+# Use 5 or 4 PCs?
+dat.pca <- prcomp(scaled_dat) %>% summary() %>% print()
+apply(traits.dat, 2, sd)
+
+# Can we compute factor scores?
+# Yes, we have the original dataset. 
+# Use PC5 since the cumulative proportion is 0.95611
+# weight looks to be insignificant, since the PCs have low loadings for the weight variable. 
+
+# maybe use PC1 or PC7 to compute the factor scores?
+# if we care about covering more variation, we use PC7; otherwise, we use PC1. 
+# PC1 individually captures the most variation 
+
+PC.mat <- dat.pca1$rotation[,1] %>% as.matrix()
+scores <- (traits.dat %*% PC.mat)
+new.cleandata <- data.frame(clean.data, scores)
+
+ranks <- new.cleandata %>% arrange(desc(scores))
+ranks
+
+# we might rank Parent Entry: 15771 as the best entry and Parent CMC 10126 s the best parent? Most of our highest scores lie within the 10126 parent. 
+# Perhaps, the CMC10134 parent is the worst parent, based off on the factor scores. We see that entry CEN 15411 may be the worst entry for the centipede grass. 
 ```
